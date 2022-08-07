@@ -25,6 +25,10 @@ import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.module.annotations.ReactModule;
 import com.facebook.react.modules.core.RCTNativeAppEventEmitter;
 
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -157,11 +161,14 @@ public class RNFSManager extends ReactContextBaseJavaModule {
   public void writeFile(String filepath, String base64Content, ReadableMap options, Promise promise) {
     try {
       byte[] bytes = Base64.decode(base64Content, Base64.DEFAULT);
-
+      Boolean encrypted = options.getBoolean("encrypted");
       OutputStream outputStream = getOutputStream(filepath, false);
-      outputStream.write(bytes);
+      if (encrypted) {
+        outputStream.write(encryptAes(bytes, options));
+      } else {
+        outputStream.write(bytes);
+      }
       outputStream.close();
-
       promise.resolve(null);
     } catch (Exception ex) {
       ex.printStackTrace();
@@ -220,12 +227,12 @@ public class RNFSManager extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
-  public void readFile(String filepath, Promise promise) {
+  public void readFile(String filepath, ReadableMap options, Promise promise) {
     try {
       InputStream inputStream = getInputStream(filepath);
       byte[] inputData = getInputStreamBytes(inputStream);
-      String base64Content = Base64.encodeToString(inputData, Base64.NO_WRAP);
-
+      Boolean encrypted = options.getBoolean("encrypted");
+      String base64Content = encrypted ? Base64.encodeToString(decryptAes(inputData, options), Base64.NO_WRAP) : Base64.encodeToString(inputData, Base64.NO_WRAP);
       promise.resolve(base64Content);
     } catch (Exception ex) {
       ex.printStackTrace();
@@ -251,7 +258,7 @@ public class RNFSManager extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
-  public void readFileAssets(String filepath, Promise promise) {
+  public void readFileAssets(String filepath, ReadableMap options, Promise promise) {
     InputStream stream = null;
     try {
       // ensure isn't a directory
@@ -264,7 +271,9 @@ public class RNFSManager extends ReactContextBaseJavaModule {
 
       byte[] buffer = new byte[stream.available()];
       stream.read(buffer);
-      String base64Content = Base64.encodeToString(buffer, Base64.NO_WRAP);
+
+      Boolean encrypted = options.getBoolean("encrypted");
+      String base64Content = encrypted ? Base64.encodeToString(decryptAes(buffer, options), Base64.NO_WRAP) : Base64.encodeToString(buffer, Base64.NO_WRAP);
       promise.resolve(base64Content);
     } catch (Exception ex) {
       ex.printStackTrace();
@@ -280,7 +289,7 @@ public class RNFSManager extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
-  public void readFileRes(String filename, Promise promise) {
+  public void readFileRes(String filename, ReadableMap options, Promise promise) {
     InputStream stream = null;
     try {
       int res = getResIdentifier(filename);
@@ -292,7 +301,8 @@ public class RNFSManager extends ReactContextBaseJavaModule {
 
       byte[] buffer = new byte[stream.available()];
       stream.read(buffer);
-      String base64Content = Base64.encodeToString(buffer, Base64.NO_WRAP);
+      Boolean encrypted = options.getBoolean("encrypted");
+      String base64Content = encrypted ? Base64.encodeToString(decryptAes(buffer, options), Base64.NO_WRAP) : Base64.encodeToString(buffer, Base64.NO_WRAP);
       promise.resolve(base64Content);
     } catch (Exception ex) {
       ex.printStackTrace();
@@ -697,9 +707,10 @@ public class RNFSManager extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
-  public void downloadFile(final ReadableMap options, final Promise promise) {
+  public void downloadFile(final ReadableMap options, final ReadableMap fileOptions, final Promise promise) {
     try {
-      File file = new File(options.getString("toFile"));
+      final String fileUri = options.getString("toFile");
+      File file = new File(fileUri);
       URL url = new URL(options.getString("fromUrl"));
       final int jobId = options.getInt("jobId");
       ReadableMap headers = options.getMap("headers");
@@ -723,13 +734,26 @@ public class RNFSManager extends ReactContextBaseJavaModule {
       params.onTaskCompleted = new DownloadParams.OnTaskCompleted() {
         public void onTaskCompleted(DownloadResult res) {
           if (res.exception == null) {
-            WritableMap infoMap = Arguments.createMap();
+            try {
+              Boolean encrypted = fileOptions.getBoolean("encrypted");
+              if (encrypted) {
+                  InputStream inputStream = getInputStream(fileUri);
+                  byte[] inputData = getInputStreamBytes(inputStream);
+                  inputStream.close();
+                  OutputStream outputStream = getOutputStream(fileUri, false);
+                  outputStream.write(encryptAes(inputData, fileOptions));
+                  outputStream.close();
+              }
+              WritableMap infoMap = Arguments.createMap();
 
-            infoMap.putInt("jobId", jobId);
-            infoMap.putInt("statusCode", res.statusCode);
-            infoMap.putDouble("bytesWritten", (double)res.bytesWritten);
+              infoMap.putInt("jobId", jobId);
+              infoMap.putInt("statusCode", res.statusCode);
+              infoMap.putDouble("bytesWritten", (double)res.bytesWritten);
 
-            promise.resolve(infoMap);
+              promise.resolve(infoMap);
+            } catch (Exception ex) {
+              reject(promise, options.getString("toFile"), ex);
+            }
           } else {
             reject(promise, options.getString("toFile"), res.exception);
           }
@@ -1021,5 +1045,43 @@ public class RNFSManager extends ReactContextBaseJavaModule {
     }
 
     return constants;
+  }
+
+  private static byte[] encryptAes(byte[] inputData, ReadableMap options) {
+    byte[] encrypted = null;
+    try {
+      String password = options.getString("passphrase");
+      String iv = options.getString("iv");
+      SecretKeySpec secretKey = new SecretKeySpec(password.getBytes("UTF-8"), "AES");
+      Cipher cipher = Cipher.getInstance("AES");
+      if (iv != null && iv.length() > 0) {
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, new IvParameterSpec(iv.getBytes("UTF-8")));
+      } else {
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+      }
+      encrypted = cipher.doFinal(inputData);
+    } catch (Exception ex) {
+      ex.printStackTrace();
+    }
+    return encrypted;
+  }
+
+  private static byte[] decryptAes(byte[] inputData, ReadableMap options) {
+    byte[] decrypted = null;
+    try {
+      String password = options.getString("passphrase");
+      String iv = options.getString("iv");
+      SecretKeySpec secretKey = new SecretKeySpec(password.getBytes("UTF-8"), "AES");
+      Cipher cipher = Cipher.getInstance("AES");
+      if (iv != null && iv.length() > 0) {
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, new IvParameterSpec(iv.getBytes("UTF-8")));
+      } else {
+        cipher.init(Cipher.DECRYPT_MODE, secretKey);
+      }
+      decrypted = cipher.doFinal(inputData);
+    } catch (Exception ex) {
+      ex.printStackTrace();
+    }
+    return decrypted;
   }
 }

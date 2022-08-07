@@ -22,6 +22,7 @@
 #endif
 
 #import <CommonCrypto/CommonDigest.h>
+#import <CommonCrypto/CommonCryptor.h>
 #import <Photos/Photos.h>
 
 
@@ -118,6 +119,12 @@ RCT_EXPORT_METHOD(writeFile:(NSString *)filepath
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
   NSData *data = [[NSData alloc] initWithBase64EncodedString:base64Content options:NSDataBase64DecodingIgnoreUnknownCharacters];
+
+  NSNumber* encrypted = options[@"encrypted"];
+  BOOL isEncrypted = encrypted ? [encrypted boolValue] : NO;
+  if (isEncrypted) {
+    data = [self AES256Encrypt:data key:options[@"passphrase"] iv:options[@"iv"]];
+  }
 
   NSMutableDictionary *attributes = [[NSMutableDictionary alloc] init];
 
@@ -266,6 +273,7 @@ RCT_EXPORT_METHOD(mkdir:(NSString *)filepath
 }
 
 RCT_EXPORT_METHOD(readFile:(NSString *)filepath
+                  options:(NSDictionary *)options
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
@@ -288,7 +296,17 @@ RCT_EXPORT_METHOD(readFile:(NSString *)filepath
   }
 
   NSData *content = [[NSFileManager defaultManager] contentsAtPath:filepath];
-  NSString *base64Content = [content base64EncodedStringWithOptions:NSDataBase64EncodingEndLineWithLineFeed];
+  NSString *base64Content;
+
+  NSNumber* encrypted = options[@"encrypted"];
+  BOOL isEncrypted = encrypted ? [encrypted boolValue] : NO;
+    
+  if (isEncrypted) {
+    NSData *deryptedContent = [self AES256Decrypt:content key:options[@"passphrase"] iv:options[@"iv"]];
+    base64Content = [deryptedContent base64EncodedStringWithOptions:NSDataBase64EncodingEndLineWithLineFeed];
+  } else {
+    base64Content = [content base64EncodedStringWithOptions:NSDataBase64EncodingEndLineWithLineFeed];
+  }
 
   resolve(base64Content);
 }
@@ -469,6 +487,7 @@ RCT_EXPORT_METHOD(copyFile:(NSString *)filepath
 }
 
 RCT_EXPORT_METHOD(downloadFile:(NSDictionary *)options
+                  fileOptions:(NSDictionary *)fileOptions
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
@@ -512,6 +531,16 @@ RCT_EXPORT_METHOD(downloadFile:(NSDictionary *)options
     if (bytesWritten) {
       [result setObject:bytesWritten forKey: @"bytesWritten"];
     }
+
+    NSNumber* encrypted = fileOptions[@"encrypted"];
+    BOOL isEncrypted = encrypted ? [encrypted boolValue] : NO;
+    if (isEncrypted) {
+      NSMutableDictionary *attributes = [[NSMutableDictionary alloc] init];
+      NSData *content = [[NSFileManager defaultManager] contentsAtPath:options[@"toFile"]];
+      NSData *encryptedData = [self AES256Encrypt:content key:options[@"passphrase"] iv:options[@"iv"]];
+      [[NSFileManager defaultManager] createFileAtPath:options[@"toFile"] contents:encryptedData attributes:attributes];
+    }
+
     return resolve(result);
   };
 
@@ -986,6 +1015,61 @@ RCT_EXPORT_METHOD(touch:(NSString*)filepath
 {
     if (!completionHandlers) completionHandlers = [[NSMutableDictionary alloc] init];
     [completionHandlers setValue:completionHandler forKey:identifier];
+}
+
+- (NSData *)cryptOperation:(CCOperation)operation
+                        data:(NSData *)data
+                        key:(NSString *)key
+                         iv:(NSString *)iv
+{
+    // 'key' should be 32 bytes for AES256, will be null-padded otherwise
+    char keys[kCCKeySizeAES256 + 1];
+    [key getCString:keys maxLength:sizeof(keys) encoding:NSUTF8StringEncoding];
+    // Perform PKCS7Padding on the key.
+    unsigned long bytes_to_pad = sizeof(keys) - [key length];
+    if (bytes_to_pad > 0)
+    {
+        char byte = bytes_to_pad;
+        for (unsigned long i = sizeof(keys) - bytes_to_pad; i < sizeof(keys); i++)
+            keys[i] = byte;
+    }
+    NSUInteger dataLength = [data length];
+    //See the doc: For block ciphers, the output size will always be less than or
+    //equal to the input size plus the size of one block.
+    //That's why we need to add the size of one block here
+    size_t bufferSize = dataLength + kCCBlockSizeAES128;
+    void *buffer = malloc(bufferSize);
+    size_t numBytesDecrypted = 0;
+    CCCryptorStatus status = CCCrypt(operation, kCCAlgorithmAES128,
+                                     kCCOptionPKCS7Padding,
+                                     keys, kCCKeySizeAES256,
+                                     [iv UTF8String],
+                                     //byteData, dataLength, /* input */
+                                     [data bytes], dataLength, /* input */
+                                     buffer, bufferSize, /* output */
+                                     &numBytesDecrypted);
+    if (status == kCCSuccess)
+    {
+        return [NSData dataWithBytesNoCopy:buffer length:numBytesDecrypted];
+    }
+    free(buffer);
+    return nil;
+}
+
+- (NSData *)AES256Encrypt:(NSData *)data
+                      key:(NSString *)key
+                       iv:(NSString *)iv
+{
+    NSData *dataEncrypted = [self cryptOperation:kCCEncrypt data:data key:key iv:iv];
+    return dataEncrypted;
+}
+
+- (NSData *)AES256Decrypt:(NSData *)data
+                      key:(NSString *)key
+                       iv:(NSString *)iv
+{
+    NSData *dataDecrypted = [self cryptOperation:kCCDecrypt data:data key:key iv:iv];
+    return dataDecrypted;
 }
 
 @end

@@ -31,7 +31,11 @@ public class Downloader extends AsyncTask<DownloadParams, long[], DownloadResult
           mParam.onTaskCompleted.onTaskCompleted(res);
         } catch (Exception ex) {
           res.exception = ex;
-          mParam.onTaskCompleted.onTaskCompleted(res);
+          try {
+            mParam.onTaskCompleted.onTaskCompleted(res);
+          } catch (Exception ex2) {
+            ex2.printStackTrace();
+          }
         }
       }
     }).start();
