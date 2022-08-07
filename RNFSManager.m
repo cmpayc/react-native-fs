@@ -537,7 +537,7 @@ RCT_EXPORT_METHOD(downloadFile:(NSDictionary *)options
     if (isEncrypted) {
       NSMutableDictionary *attributes = [[NSMutableDictionary alloc] init];
       NSData *content = [[NSFileManager defaultManager] contentsAtPath:options[@"toFile"]];
-      NSData *encryptedData = [self AES256Encrypt:content key:options[@"passphrase"] iv:options[@"iv"]];
+      NSData *encryptedData = [self AES256Encrypt:content key:fileOptions[@"passphrase"] iv:fileOptions[@"iv"]];
       [[NSFileManager defaultManager] createFileAtPath:options[@"toFile"] contents:encryptedData attributes:attributes];
     }
 
