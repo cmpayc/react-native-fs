@@ -335,6 +335,10 @@ var RNFS = {
     return readFileGeneric(filepath, encodingOrOptions, RNFSManager.readFile);
   },
 
+  readFileAsFloat(filepath: string, encodingOrOptions?: any): Promise<string> {
+    return readFileGeneric(filepath, encodingOrOptions, RNFSManager.readFileAsFloat);
+  },
+
   read(filepath: string, length: number = 0, position: number = 0, encodingOrOptions?: any): Promise<string> {
     var options = {
       encoding: 'utf8'

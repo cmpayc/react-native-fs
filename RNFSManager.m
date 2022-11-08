@@ -311,6 +311,54 @@ RCT_EXPORT_METHOD(readFile:(NSString *)filepath
   resolve(base64Content);
 }
 
+RCT_EXPORT_METHOD(readFileAsFloat:(NSString *)filepath
+                  options:(NSDictionary *)options
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+  BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:filepath];
+
+  if (!fileExists) {
+    return reject(@"ENOENT", [NSString stringWithFormat:@"ENOENT: no such file or directory, open '%@'", filepath], nil);
+  }
+
+  NSError *error = nil;
+
+  NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:filepath error:&error];
+
+  if (error) {
+    return [self reject:reject withError:error];
+  }
+
+  if ([attributes objectForKey:NSFileType] == NSFileTypeDirectory) {
+    return reject(@"EISDIR", @"EISDIR: illegal operation on a directory, read", nil);
+  }
+
+  NSData *content = [[NSFileManager defaultManager] contentsAtPath:filepath];
+  NSNumber* encrypted = options[@"encrypted"];
+  BOOL isEncrypted = encrypted ? [encrypted boolValue] : NO;
+  if (isEncrypted) {
+    content = [self AES256Decrypt:content key:options[@"passphrase"] iv:options[@"iv"]];
+  } 
+
+  NSUInteger len = [content length];
+  Byte *byteData = (Byte*)malloc(len);
+  memcpy(byteData, [content bytes], len);
+  NSMutableArray *result = [[NSMutableArray alloc] init];
+  for (int i = 0; i < content.length; i += 4) {
+    unsigned char *fourbytearray = (unsigned char *)calloc(4, sizeof(unsigned char));
+    fourbytearray[0] = byteData[i];
+    fourbytearray[1] = byteData[i + 1];
+    fourbytearray[2] = byteData[i + 2];
+    fourbytearray[3] = byteData[i + 3];
+    float floatNum = *(float *)fourbytearray;
+    NSNumber *num = [NSNumber numberWithFloat:floatNum];
+    [result addObject:num];
+  }
+
+  resolve(result);
+}
+
 RCT_EXPORT_METHOD(read:(NSString *)filepath
                   length: (NSInteger *)length
                   position: (NSInteger *)position

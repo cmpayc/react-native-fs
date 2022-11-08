@@ -241,6 +241,31 @@ public class RNFSManager extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
+  public void readFileAsFloat(String filepath, ReadableMap options, Promise promise) {
+    try {
+      InputStream inputStream = getInputStream(filepath);
+      byte[] inputData = getInputStreamBytes(inputStream);
+      Boolean encrypted = options.getBoolean("encrypted");
+      if (encrypted) {
+        inputData = decryptAes(inputData, options);
+      }
+      WritableArray result = Arguments.createArray();
+      for (int i = 0; i < inputData.length; i += 4) {
+        int asInt = (inputData[i] & 0xFF)
+                | ((inputData[i + 1] & 0xFF) << 8)
+                | ((inputData[i + 2] & 0xFF) << 16)
+                | ((inputData[i + 3] & 0xFF) << 24);
+        float asFloat = Float.intBitsToFloat(asInt);
+        result.pushDouble(asFloat);
+      }
+      promise.resolve(result);
+    } catch (Exception ex) {
+      ex.printStackTrace();
+      reject(promise, filepath, ex);
+    }
+  }
+
+  @ReactMethod
   public void read(String filepath, int length, int position, Promise promise) {
     try {
       InputStream inputStream = getInputStream(filepath);
