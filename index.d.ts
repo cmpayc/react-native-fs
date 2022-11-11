@@ -187,6 +187,12 @@ export function readFileAsFloat(
 	filepath: string,
 	encodingOrOptions?: any
 ): Promise<string>
+export function readAsFloat(
+	filepath: string,
+	length?: number,
+	position?: number,
+	encodingOrOptions?: any
+): Promise<string>
 export function read(
 	filepath: string,
 	length?: number,
