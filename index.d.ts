@@ -193,6 +193,12 @@ export function readAsFloat(
 	position?: number,
 	encodingOrOptions?: any
 ): Promise<string>
+export function readAsInt8(
+	filepath: string,
+	length?: number,
+	position?: number,
+	encodingOrOptions?: any
+): Promise<string>
 export function read(
 	filepath: string,
 	length?: number,

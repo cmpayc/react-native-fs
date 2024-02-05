@@ -345,6 +345,12 @@ var RNFS = {
     });
   },
 
+  readAsInt8(filepath: string, length: number = 0, position: number = 0, encodingOrOptions?: any): Promise<string> {
+    return RNFSManager.readAsInt8(normalizeFilePath(filepath), length, position).then((contents) => {
+      return contents;
+    });
+  },
+
   read(filepath: string, length: number = 0, position: number = 0, encodingOrOptions?: any): Promise<string> {
     var options = {
       encoding: 'utf8'

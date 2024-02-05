@@ -292,6 +292,25 @@ public class RNFSManager extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
+  public void readAsInt8(String filepath, int length, int position, Promise promise) {
+    try {
+      InputStream inputStream = getInputStream(filepath);
+      byte[] inputData = new byte[length];
+      inputStream.skip(position);
+      int bytesRead = inputStream.read(inputData, 0, length);
+      WritableArray result = Arguments.createArray();
+      for (int i = 0; i < inputData.length; i += 1) {
+        int asInt = inputData[i] & 0xFF;
+        result.pushInt(asInt);
+      }
+      promise.resolve(result);
+    } catch (Exception ex) {
+      ex.printStackTrace();
+      reject(promise, filepath, ex);
+    }
+  }
+
+  @ReactMethod
   public void read(String filepath, int length, int position, Promise promise) {
     try {
       InputStream inputStream = getInputStream(filepath);
