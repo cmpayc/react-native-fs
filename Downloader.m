@@ -145,10 +145,8 @@
     NSLog(@"RNFS download: didCompleteWithError %@, %@", error, error.userInfo);
     if (error.code != NSURLErrorCancelled) {
       _resumeData = error.userInfo[NSURLSessionDownloadTaskResumeData];
-      if (_resumeData != nil) {
-        if (_params.resumableCallback) {
-            _params.resumableCallback();
-        }
+      if (_resumeData != nil && _params.resumableCallback) {
+          _params.resumableCallback();
       } else {
           _params.errorCallback(error);
       }
