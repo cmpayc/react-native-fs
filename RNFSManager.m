@@ -360,8 +360,8 @@ RCT_EXPORT_METHOD(readFileAsFloat:(NSString *)filepath
 }
 
 RCT_EXPORT_METHOD(readAsFloat:(NSString *)filepath
-                  length: (NSInteger *)length
-                  position: (NSInteger *)position
+                  length: (NSInteger)length
+                  position: (NSInteger)position
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
@@ -421,8 +421,8 @@ RCT_EXPORT_METHOD(readAsFloat:(NSString *)filepath
 }
 
 RCT_EXPORT_METHOD(readAsInt8:(NSString *)filepath
-                  length: (NSInteger *)length
-                  position: (NSInteger *)position
+                  length: (NSInteger)length
+                  position: (NSInteger)position
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
@@ -476,8 +476,8 @@ RCT_EXPORT_METHOD(readAsInt8:(NSString *)filepath
 }
 
 RCT_EXPORT_METHOD(read:(NSString *)filepath
-                  length: (NSInteger *)length
-                  position: (NSInteger *)position
+                  length: (NSInteger)length
+                  position: (NSInteger)position
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
